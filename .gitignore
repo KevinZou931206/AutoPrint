@@ -17,6 +17,8 @@ logs/
 dist/
 build/
 *.spec
+*.exe
+*.pkg
 
 # IDE
 .idea/
