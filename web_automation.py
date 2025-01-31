@@ -11,7 +11,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from datetime import datetime
 import time
 
-from config import URLS, SELECTORS, WAIT_TIME, ORDER_THRESHOLDS, WORK_START_TIME, WORK_MIDDLE_TIME
+from config import URLS, SELECTORS, WAIT_TIME, ORDER_THRESHOLDS, time_config
 from logger import logger
 
 class WebAutomation:
@@ -171,11 +171,14 @@ class WebAutomation:
             time.sleep(WAIT_TIME['short'])
 
             # 判断当前时间应该生成什么波次
-            if wave_time:
+            current_time = datetime.now().time()
+            if time_config.WORK_START_TIME <= current_time < time_config.WORK_MIDDLE_TIME:
                 # 勾选整波
                 logger.info("勾选整波")
                 first_checkbox = self.wait_for_element(SELECTORS['wave']['first_checkbox'])
+                first_checkbox_2 = self.wait_for_element(SELECTORS['wave']['first_checkbox_2'])
                 first_checkbox.click()
+                first_checkbox_2.click()
             else:
                 # 勾选散单
                 logger.info("勾选散单")

@@ -8,11 +8,12 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QLabel, QLineEdit, QCheckBox, 
                             QPushButton, QTimeEdit, QTextEdit, QGroupBox)
 from PyQt6.QtCore import Qt, QTime, QThread, pyqtSignal
-from datetime import datetime
-import time
+from datetime import datetime, time as datetime_time
+import time as time_module
 
 from logger import logger
 from main import main as run_task
+from config import time_config
 
 class LogHandler:
     """日志处理器，用于将日志输出到UI"""
@@ -39,10 +40,10 @@ class WorkerThread(QThread):
                 for i in range(10):
                     if not self.is_running:
                         break
-                    time.sleep(60)
+                    time_module.sleep(60)
             except Exception as e:
                 self.log_signal.emit(f"任务执行出错: {str(e)}")
-                time.sleep(60)
+                time_module.sleep(60)
 
     def stop(self):
         self.is_running = False
@@ -203,6 +204,18 @@ class MainWindow(QMainWindow):
         # 保存设置
         self.save_settings()
         
+        # 更新工作时间配置
+        start = self.start_time.time()
+        middle = self.middle_time.time()
+        end = self.end_time.time()
+        
+        # 更新时间配置
+        time_config.update_times(
+            datetime_time(start.hour(), start.minute()),
+            datetime_time(middle.hour(), middle.minute()),
+            datetime_time(end.hour(), end.minute())
+        )
+        
         # 设置环境变量
         os.environ['USERNAME'] = self.username_input.text()
         os.environ['PASSWORD'] = self.password_input.text()
@@ -222,7 +235,10 @@ class MainWindow(QMainWindow):
         self.worker.log_signal.connect(self.update_log)
         self.worker.start()
         
-        self.log_signal.emit("程序已启动")
+        self.log_signal.emit("程序已启动，工作时间设置为：")
+        self.log_signal.emit(f"开始时间：{start.toString('HH:mm')}")
+        self.log_signal.emit(f"中间时间：{middle.toString('HH:mm')}")
+        self.log_signal.emit(f"结束时间：{end.toString('HH:mm')}")
 
     def stop_program(self):
         """终止程序"""

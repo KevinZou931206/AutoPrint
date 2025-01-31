@@ -3,6 +3,21 @@
 """
 from datetime import time
 
+class TimeConfig:
+    """时间配置类"""
+    def __init__(self):
+        self.WORK_START_TIME = time(7, 30)
+        self.WORK_MIDDLE_TIME = time(17, 00)
+        self.WORK_END_TIME = time(17, 30)
+    
+    def update_times(self, start_time, middle_time, end_time):
+        self.WORK_START_TIME = start_time
+        self.WORK_MIDDLE_TIME = middle_time
+        self.WORK_END_TIME = end_time
+
+# 创建全局配置实例
+time_config = TimeConfig()
+
 # URL配置
 URLS = {
     'login': 'https://erp.hupun.com/login',
@@ -10,12 +25,6 @@ URLS = {
     'order_picking': 'https://erp.hupun.com/frame/332',
     'wave_picking': 'https://erp.hupun.com/frame/3321'
 }
-
-# 时间配置
-WORK_START_TIME = time(7, 30)
-WORK_MIDDLE_TIME = time(17, 00)
-WORK_END_TIME = time(17, 30)
-
 
 # 等待时间配置（秒）
 WAIT_TIME = {
@@ -51,6 +60,7 @@ SELECTORS = {
         'wave_count': '//*[@id="app"]/div/div[1]/div[2]/div[2]/div[3]/div[4]/div[3]/div[2]/span',  # 波次数量
         'create_wave': '//*[@id="add-guide-step3-box"]/div[2]/div/div/button[1]',  # 生成波次按钮
         'first_checkbox': '//tr[@rowid="503871746583168614"]//td[@colid="col_76"]',  # 整波勾选框
+        'first_checkbox_2': '//tr[@rowid="778233247578105467"]//td[@colid="col_76"]',  # 单品勾选框
         'second_checkbox': '//tr[@rowid="863005655571211718"]//td[@colid="col_76"]',  # 散单勾选框
         'create_wave_2': '/html/body/div[3]/div/div[3]/div/div[2]/button[1]',  # 生成波次按钮
         'close_window': '//*[@id="panelTask"]/div[1]/div[2]',  # 关闭弹窗

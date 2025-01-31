@@ -7,7 +7,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 from web_automation import WebAutomation
-from config import WORK_START_TIME, WORK_END_TIME, ORDER_THRESHOLDS, WORK_MIDDLE_TIME
+from config import ORDER_THRESHOLDS, time_config
 from logger import logger
 
 # 加载环境变量
@@ -16,12 +16,15 @@ load_dotenv()
 def is_work_time():
     """判断当前是否是工作时间"""
     current_time = datetime.now().time()
-    return WORK_START_TIME <= current_time <= WORK_END_TIME
+    logger.info(f"当前时间: {current_time.strftime('%H:%M')}")
+    logger.info(f"工作时间: {time_config.WORK_START_TIME.strftime('%H:%M')} - {time_config.WORK_END_TIME.strftime('%H:%M')}")
+    return time_config.WORK_START_TIME <= current_time <= time_config.WORK_END_TIME
 
 def is_wave_time():
     """判断当前是否是波次时间"""
     current_time = datetime.now().time()
-    return WORK_START_TIME <= current_time < WORK_MIDDLE_TIME
+    logger.info(f"波次时间: {time_config.WORK_START_TIME.strftime('%H:%M')} - {time_config.WORK_MIDDLE_TIME.strftime('%H:%M')}")
+    return time_config.WORK_START_TIME <= current_time < time_config.WORK_MIDDLE_TIME
 
 def main():
     """主程序入口"""
@@ -31,7 +34,7 @@ def main():
     # 首先检查是否是工作时间
     if not is_work_time():
         logger.info("当前不是工作时间，不执行任务")
-        return
+        return False
     
     try:
         # 获取登录凭证
@@ -40,7 +43,7 @@ def main():
 
         if not username or not password:
             logger.error("未找到登录凭证，请检查环境变量")
-            return
+            return False
         
         logger.info(f"获取到登录凭证: {username}")
         
@@ -68,13 +71,16 @@ def main():
                 automation.execute_wave_picking()
             
             logger.info("任务执行完成，等待10分钟后重新执行")
+            return True
         except Exception as e:
             logger.error(f"任务执行失败: {str(e)}")
+            return False
         finally:
             automation.close()
             
     except Exception as e:
         logger.error(f"程序运行异常: {str(e)}")
+        return False
 
 if __name__ == "__main__":
     logger.info("程序启动")
