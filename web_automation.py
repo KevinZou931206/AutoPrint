@@ -144,6 +144,16 @@ class WebAutomation:
             logger.info("开始查询待打单数量")
             self.navigate_to(URLS['home'])
             
+            # 检查是否有广告弹窗
+            try:
+                ad_close = self.wait_for_element(SELECTORS['home']['ad_close'], timeout=WAIT_TIME['short'])
+                if ad_close:
+                    logger.info("检测到广告弹窗，尝试关闭")
+                    ad_close.click()
+                    time.sleep(WAIT_TIME['short'])
+            except Exception as e:
+                logger.info("未检测到广告弹窗，继续执行")
+            
             # 刷新
             refresh_button = self.wait_for_element(SELECTORS['home']['refresh_button'])
             refresh_button.click()
