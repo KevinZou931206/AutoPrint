@@ -10,9 +10,11 @@ from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 from datetime import datetime
 import time
+import traceback
 
 from config import URLS, SELECTORS, WAIT_TIME, ORDER_THRESHOLDS, time_config
 from logger import logger
+from mail_sender import email_sender
 
 class WebAutomation:
     def __init__(self):
@@ -107,7 +109,11 @@ class WebAutomation:
             raise
 
     def login(self, username, password):
-        """登录系统"""
+        """登录系统
+        
+        返回:
+            bool: 如果登录成功返回True，失败返回False
+        """
         try:
             logger.info("开始登录系统")
             self.navigate_to(URLS['login'])
@@ -133,10 +139,40 @@ class WebAutomation:
             submit_button.click()
             time.sleep(WAIT_TIME['medium'])
             
+            # 验证登录是否成功 - 简化异常处理结构
+            current_url = self.driver.current_url
+            if URLS['login'] in current_url:
+                # 仍在登录页面，登录失败
+                error_msg = ""
+                
+                # 尝试查找错误提示元素
+                try:
+                    error_element = WebDriverWait(self.driver, WAIT_TIME['short']).until(
+                        EC.presence_of_element_located((By.XPATH, SELECTORS['login']['error_message']))
+                    )
+                    error_message = error_element.text
+                    error_msg = f"登录失败，错误信息: {error_message}"
+                except Exception:
+                    # 没有找到错误元素，但仍在登录页面
+                    error_msg = "登录失败，可能是网络连接问题或登录凭证错误"
+                
+                # 记录错误并发送邮件
+                logger.error(error_msg)
+                email_sender.send_error_notification("登录失败", error_msg)
+                return False
+            
+            # 如果不在登录页面，说明登录成功
+            logger.info("登录验证通过：已成功跳转到系统页面")
             logger.info("登录系统成功")
+            return True
+                
         except Exception as e:
-            logger.error(f"登录系统失败: {str(e)}")
-            raise
+            error_msg = f"登录系统失败: {str(e)}"
+            stack_trace = traceback.format_exc()
+            logger.error(error_msg)
+            # 发送邮件通知
+            email_sender.send_error_notification("登录失败", error_msg, stack_trace)
+            return False
 
     def order_count(self):
         """查询待打单数量"""
@@ -234,7 +270,7 @@ class WebAutomation:
 
                 first_row.click()
                 generate_express.click()
-                time.sleep(WAIT_TIME['long'])
+                time.sleep(WAIT_TIME['generate_express'])
                 print_picking.click()
                 time.sleep(WAIT_TIME['medium'])
                 print_express.click()
@@ -244,7 +280,11 @@ class WebAutomation:
                 logger.info(f"第{i+1}个波次处理完成")
 
         except Exception as e:
-            logger.error(f"执行波次配货失败: {str(e)}")
+            error_msg = f"执行波次配货失败: {str(e)}"
+            stack_trace = traceback.format_exc()
+            logger.error(error_msg)
+            # 发送邮件通知
+            email_sender.send_error_notification("执行波次配货失败", error_msg, stack_trace)
             raise
 
     def close(self):

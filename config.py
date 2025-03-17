@@ -31,6 +31,7 @@ WAIT_TIME = {
     'short': 1,
     'medium': 5,
     'long': 10,
+    'generate_express': 15,
     'page_load': 3,    # 页面加载等待时间
     'iframe_load': 3    # iframe加载等待时间
 }
@@ -49,9 +50,11 @@ SELECTORS = {
         'input': '//*[@id="app"]/div/div[2]/div[2]/div[2]/div[1]/div/div/div[5]/button[1]',  # 切换账号登录
         'username': '//*[@id="app"]/div/div[2]/div[2]/div[2]/div[1]/div/div/div[2]/div/form/div[1]/div/div/input',  # 用户名
         'password': '//*[@id="input-password"]',  # 密码
-        'submit': '//*[@id="app"]/div/div[2]/div[2]/div[2]/div[1]/div/div/div[2]/div/button'  # 登录按钮
+        'submit': '//*[@id="app"]/div/div[2]/div[2]/div[2]/div[1]/div/div/div[2]/div/button',  # 登录按钮
+        'error_message': '//*[@id="app"]/div/div[2]/div[2]/div[2]/div[1]/div/div/div[2]/div/div/div/span'  # 登录错误消息
     },
     'home': {
+        'ad_close': '//*[@id="app"]/div/div/div[8]/div/i',  # 广告关闭
         'refresh_button': '//*[@id="app"]/div/div/div[6]/div[1]/div[2]/i',  # 刷新按钮
         'order_count': '//*[@id="app"]/div/div/div[6]/div[1]/div[1]/div[2]/ul/li[1]/strong'  # 待打单数量
     },

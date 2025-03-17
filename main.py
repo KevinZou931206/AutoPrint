@@ -3,12 +3,14 @@
 """
 import os
 import time
+import traceback
 from datetime import datetime
 from dotenv import load_dotenv
 
 from web_automation import WebAutomation
 from config import ORDER_THRESHOLDS, time_config
 from logger import logger
+from mail_sender import email_sender
 
 # 加载环境变量
 load_dotenv()
@@ -36,13 +38,16 @@ def main():
         logger.info("当前不是工作时间，不执行任务")
         return False
     
+    automation = None
     try:
         # 获取登录凭证
         username = os.getenv('USERNAME')
         password = os.getenv('PASSWORD')
 
         if not username or not password:
-            logger.error("未找到登录凭证，请检查环境变量")
+            error_msg = "未找到登录凭证，请检查环境变量"
+            logger.error(error_msg)
+            email_sender.send_error_notification("登录凭证错误", error_msg)
             return False
         
         logger.info(f"获取到登录凭证: {username}")
@@ -51,7 +56,12 @@ def main():
         automation = WebAutomation()
         try:
             # 登录系统
-            automation.login(username, password)
+            login_success = automation.login(username, password)
+            
+            # 如果登录失败，直接返回False结束任务
+            if not login_success:
+                logger.error("登录失败，终止任务")
+                return False
 
             # 查询待打单数量
             order_count = automation.order_count()
@@ -73,26 +83,53 @@ def main():
             logger.info("任务执行完成，等待10分钟后重新执行")
             return True
         except Exception as e:
-            logger.error(f"任务执行失败: {str(e)}")
+            error_msg = f"任务执行失败: {str(e)}"
+            stack_trace = traceback.format_exc()
+            logger.error(error_msg)
+            # 发送邮件通知
+            email_sender.send_error_notification("任务执行失败", error_msg, stack_trace)
             return False
         finally:
-            automation.close()
+            if automation:
+                automation.close()
             
     except Exception as e:
-        logger.error(f"程序运行异常: {str(e)}")
+        error_msg = f"程序运行异常: {str(e)}"
+        stack_trace = traceback.format_exc()
+        logger.error(error_msg)
+        # 发送邮件通知
+        email_sender.send_error_notification("程序异常", error_msg, stack_trace)
         return False
 
 if __name__ == "__main__":
     logger.info("程序启动")
     
     try:
+        # 验证邮件配置
+        if email_sender.is_configured():
+            logger.info("邮件配置有效，异常通知已启用")
+        else:
+            logger.warning("邮件配置不完整，异常通知将不可用")
+            
         while True:
-            # 执行任务
-            main()
+            try:
+                # 执行任务
+                main()
+            except Exception as e:
+                error_msg = f"主任务执行异常: {str(e)}"
+                stack_trace = traceback.format_exc()
+                logger.error(error_msg)
+                # 发送邮件通知
+                email_sender.send_error_notification("主任务异常", error_msg, stack_trace)
+                
             # 等待10分钟
             time.sleep(10 * 60)
                 
     except KeyboardInterrupt:
         logger.info("程序被手动停止")
     except Exception as e:
-        logger.error(f"程序异常退出: {str(e)}")
+        error_msg = f"程序异常退出: {str(e)}"
+        stack_trace = traceback.format_exc()
+        logger.error(error_msg)
+        # 发送邮件通知
+        email_sender.send_error_notification("程序崩溃", error_msg, stack_trace)
