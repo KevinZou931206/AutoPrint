@@ -13,7 +13,8 @@ from datetime import datetime, time as datetime_time
 import time as time_module
 
 from logger import logger, set_ui_signal
-from main import main as run_task
+# 防止循环导入，需要的时候再导入
+# import main
 from config import time_config
 from mail_sender import email_sender
 from version import VERSION, VERSION_DATE, VERSION_INFO
@@ -31,16 +32,21 @@ class WorkerThread(QThread):
     finished = pyqtSignal()
     log_signal = pyqtSignal(str)
 
-    def __init__(self):
+    def __init__(self, interval=10):
         super().__init__()
         self.is_running = True
+        self.interval = interval  # 任务间隔时间，单位为分钟
 
     def run(self):
+        # 导入放在函数内部，避免循环导入
+        import main as main_module
+        
         while self.is_running:
             try:
-                run_task()
-                # 等待10分钟
-                for i in range(10):
+                main_module.main()
+                # 等待设定的间隔时间
+                logger.info(f"任务执行完成，等待 {self.interval} 分钟后重新执行")
+                for i in range(self.interval):
                     if not self.is_running:
                         break
                     time_module.sleep(60)
@@ -165,6 +171,20 @@ class MainWindow(QMainWindow):
         time_layout.addLayout(end_layout)
         time_group.setLayout(time_layout)
 
+        # 添加任务间隔时间设置
+        interval_group = QGroupBox("任务间隔设置")
+        interval_layout = QHBoxLayout()
+        interval_group.setLayout(interval_layout)
+        
+        interval_label = QLabel("任务执行间隔(分钟):")
+        self.interval_spinbox = QSpinBox()
+        self.interval_spinbox.setRange(1, 60)  # 允许设置1到60分钟的间隔
+        self.interval_spinbox.setValue(10)     # 默认为10分钟
+        self.interval_spinbox.setSingleStep(1)
+        
+        interval_layout.addWidget(interval_label)
+        interval_layout.addWidget(self.interval_spinbox)
+
         # 控制按钮
         button_layout = QHBoxLayout()
         self.start_button = QPushButton("启动程序")
@@ -186,6 +206,7 @@ class MainWindow(QMainWindow):
         # 添加所有组件到主布局
         layout.addWidget(login_group)
         layout.addWidget(time_group)
+        layout.addWidget(interval_group)
         layout.addLayout(button_layout)
         layout.addWidget(log_group)
 
@@ -346,6 +367,9 @@ class MainWindow(QMainWindow):
                 self.start_time.setTime(QTime(int(start[0]), int(start[1])))
                 self.middle_time.setTime(QTime(int(middle[0]), int(middle[1])))
                 self.end_time.setTime(QTime(int(end[0]), int(end[1])))
+                
+                # 加载任务间隔设置
+                self.interval_spinbox.setValue(settings.get('task_interval', 10))
             except Exception as e:
                 self.log_text.append(f"加载设置失败: {str(e)}")
 
@@ -377,11 +401,12 @@ class MainWindow(QMainWindow):
         self.start_time.setEnabled(False)
         self.middle_time.setEnabled(False)
         self.end_time.setEnabled(False)
+        self.interval_spinbox.setEnabled(False)
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
         
         # 启动工作线程
-        self.worker_thread = WorkerThread()
+        self.worker_thread = WorkerThread(self.interval_spinbox.value())
         self.worker_thread.log_signal.connect(self.update_log)
         self.worker_thread.start()
         
@@ -389,6 +414,7 @@ class MainWindow(QMainWindow):
         logger.info(f"开始时间：{start.toString('HH:mm')}")
         logger.info(f"中间时间：{middle.toString('HH:mm')}")
         logger.info(f"结束时间：{end.toString('HH:mm')}")
+        logger.info(f"任务间隔：{self.interval_spinbox.value()}分钟")
 
     def stop_program(self):
         """终止程序"""
@@ -397,6 +423,15 @@ class MainWindow(QMainWindow):
             self.worker_thread.wait()
             self.worker_thread = None
         
+        # 确保关闭全局浏览器实例
+        try:
+            import main as main_module
+            if hasattr(main_module, 'global_automation') and main_module.global_automation:
+                main_module.global_automation.close()
+                main_module.global_automation = None
+        except Exception as e:
+            logger.error(f"关闭浏览器失败: {str(e)}")
+            
         # 启用输入和启动按钮
         self.username_input.setEnabled(True)
         self.password_input.setEnabled(True)
@@ -404,6 +439,7 @@ class MainWindow(QMainWindow):
         self.start_time.setEnabled(True)
         self.middle_time.setEnabled(True)
         self.end_time.setEnabled(True)
+        self.interval_spinbox.setEnabled(True)
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         
@@ -435,7 +471,8 @@ class MainWindow(QMainWindow):
                 'remember_password': self.remember_checkbox.isChecked(),
                 'start_time': self.start_time.time().toString('HH:mm'),
                 'middle_time': self.middle_time.time().toString('HH:mm'),
-                'end_time': self.end_time.time().toString('HH:mm')
+                'end_time': self.end_time.time().toString('HH:mm'),
+                'task_interval': self.interval_spinbox.value()
             })
             
             if self.remember_checkbox.isChecked():
