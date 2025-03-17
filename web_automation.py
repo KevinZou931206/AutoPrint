@@ -292,3 +292,28 @@ class WebAutomation:
         if self.driver:
             self.driver.quit()
             logger.info("浏览器已关闭")
+
+    def is_logged_in(self):
+        """检查当前是否已登录
+        
+        返回:
+            bool: 如果已登录返回True，未登录返回False
+        """
+        try:
+            # 尝试访问首页
+            self.driver.get(URLS['home'])
+            time.sleep(WAIT_TIME['page_load'])
+            
+            # 检查当前URL是否包含登录页面
+            current_url = self.driver.current_url
+            if URLS['login'] in current_url:
+                logger.info("用户未登录或会话已过期")
+                return False
+            
+            # 如果URL不是登录页面，则认为用户已登录
+            logger.info("用户已登录")
+            return True
+                
+        except Exception as e:
+            logger.warning(f"检查登录状态时发生错误: {str(e)}")
+            return False
