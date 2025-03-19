@@ -394,7 +394,11 @@ class MainWindow(QMainWindow):
 
         # 保存设置
         self.save_settings()
-
+        
+        # 设置环境变量，确保登录凭证可被main.py获取
+        os.environ['USERNAME'] = username
+        os.environ['PASSWORD'] = password
+        
         # 设置时间
         start_time = self.start_time.time().toPyTime()
         middle_time = self.middle_time.time().toPyTime()
