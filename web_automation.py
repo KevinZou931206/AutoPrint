@@ -16,6 +16,9 @@ from config import URLS, SELECTORS, WAIT_TIME, ORDER_THRESHOLDS, time_config
 from logger import logger
 from mail_sender import email_sender
 
+# 添加UI错误对话框信号变量
+ui_error_dialog_signal = None
+
 class WebAutomation:
     def __init__(self):
         """初始化WebAutomation类"""
@@ -159,6 +162,16 @@ class WebAutomation:
                 # 记录错误并发送邮件
                 logger.error(error_msg)
                 email_sender.send_error_notification("登录失败", error_msg)
+                
+                # 弹出对话框让用户手动处理
+                if ui_error_dialog_signal:
+                    # 使用UI信号显示错误对话框，等待用户确认
+                    ui_error_dialog_signal.emit(error_msg)
+                else:
+                    logger.warning("UI错误对话框信号未设置，无法显示登录失败提示")
+                    # 等待额外的时间让用户注意到错误
+                    time.sleep(WAIT_TIME['long'])
+                
                 return False
             
             # 如果不在登录页面，说明登录成功
@@ -172,6 +185,14 @@ class WebAutomation:
             logger.error(error_msg)
             # 发送邮件通知
             email_sender.send_error_notification("登录失败", error_msg, stack_trace)
+            
+            # 弹出对话框让用户手动处理
+            if ui_error_dialog_signal:
+                # 使用UI信号显示错误对话框，等待用户确认
+                ui_error_dialog_signal.emit(error_msg)
+            else:
+                logger.warning("UI错误对话框信号未设置，无法显示登录失败提示")
+                
             return False
 
     def order_count(self):
@@ -268,15 +289,54 @@ class WebAutomation:
                 print_express = self.wait_for_element(SELECTORS['wave']['print_express'])
                 confirm_picking = self.wait_for_element(SELECTORS['wave']['confirm_picking'])
 
+                # 点击第一行
                 first_row.click()
+                time.sleep(WAIT_TIME['short'])
+                
+                # 生成快递单
                 generate_express.click()
                 time.sleep(WAIT_TIME['generate_express'])
+                
+                # 打印拣货单
                 print_picking.click()
                 time.sleep(WAIT_TIME['medium'])
+                
+                # 打印快递单
                 print_express.click()
                 time.sleep(WAIT_TIME['medium'])
+                
+                # 确认配货
                 confirm_picking.click()
                 time.sleep(WAIT_TIME['medium'])
+                
+                # 检测配货是否成功
+                try:
+                    # 尝试查找错误提示元素，设置较短的超时时间
+                    error_element = WebDriverWait(self.driver, WAIT_TIME['short']).until(
+                        EC.presence_of_element_located((By.XPATH, "/html/body/div[3]/div/div[1]/span"))
+                    )
+                    
+                    # 如果找到元素，表示配货失败
+                    error_message = error_element.text
+                    error_msg = f"第{i+1}个波次确认配货失败: {error_message}"
+                    logger.error(error_msg)
+                    
+                    # 发送邮件通知
+                    email_sender.send_error_notification("波次配货失败", error_msg)
+                    
+                    # 弹出对话框让用户手动处理
+                    if ui_error_dialog_signal:
+                        # 使用UI信号显示错误对话框，等待用户确认
+                        ui_error_dialog_signal.emit(error_msg)
+                    else:
+                        logger.warning("UI错误对话框信号未设置，无法显示错误提示")
+                        # 等待额外的时间让用户注意到错误
+                        time.sleep(WAIT_TIME['long'])
+                    
+                except Exception:
+                    # 没有找到错误元素，表示配货成功
+                    logger.info(f"第{i+1}个波次确认配货成功")
+                
                 logger.info(f"第{i+1}个波次处理完成")
 
         except Exception as e:

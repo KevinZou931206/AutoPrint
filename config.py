@@ -6,14 +6,21 @@ from datetime import time
 class TimeConfig:
     """时间配置类"""
     def __init__(self):
-        self.WORK_START_TIME = time(7, 30)
-        self.WORK_MIDDLE_TIME = time(17, 00)
-        self.WORK_END_TIME = time(17, 30)
+        self.WORK_START_TIME = time(7, 0)
+        self.WORK_MIDDLE_TIME = time(16, 0)
+        self.WORK_END_TIME = time(17, 0)
     
     def update_times(self, start_time, middle_time, end_time):
         self.WORK_START_TIME = start_time
         self.WORK_MIDDLE_TIME = middle_time
         self.WORK_END_TIME = end_time
+
+    def set_times(self, start_time, middle_time, end_time):
+        """设置工作时间"""
+        self.WORK_START_TIME = start_time
+        self.WORK_MIDDLE_TIME = middle_time
+        self.WORK_END_TIME = end_time
+        return f"工作时间已设置：开始={start_time.strftime('%H:%M')}，中间={middle_time.strftime('%H:%M')}，结束={end_time.strftime('%H:%M')}"
 
 # 创建全局配置实例
 time_config = TimeConfig()

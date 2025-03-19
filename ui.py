@@ -7,7 +7,7 @@ import json
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QLabel, QLineEdit, QCheckBox, 
                             QPushButton, QTimeEdit, QTextEdit, QGroupBox,
-                            QTabWidget, QSpinBox)
+                            QTabWidget, QSpinBox, QMessageBox)
 from PyQt6.QtCore import Qt, QTime, QThread, pyqtSignal
 from datetime import datetime, time as datetime_time
 import time as time_module
@@ -61,6 +61,8 @@ class WorkerThread(QThread):
 class MainWindow(QMainWindow):
     """主窗口类"""
     log_signal = pyqtSignal(str)
+    # 添加新信号用于异常处理对话框
+    error_dialog_signal = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -105,6 +107,9 @@ class MainWindow(QMainWindow):
         
         # 加载设置
         self.load_settings()
+        
+        # 连接异常处理信号
+        self.error_dialog_signal.connect(self.show_error_dialog)
         
     def _setup_main_tab(self, tab):
         """设置主配置页面"""
@@ -177,13 +182,13 @@ class MainWindow(QMainWindow):
         interval_group.setLayout(interval_layout)
         
         interval_label = QLabel("任务执行间隔(分钟):")
-        self.interval_spinbox = QSpinBox()
-        self.interval_spinbox.setRange(1, 60)  # 允许设置1到60分钟的间隔
-        self.interval_spinbox.setValue(10)     # 默认为10分钟
-        self.interval_spinbox.setSingleStep(1)
+        self.task_interval_spinbox = QSpinBox()
+        self.task_interval_spinbox.setRange(1, 60)  # 允许设置1到60分钟的间隔
+        self.task_interval_spinbox.setValue(10)     # 默认为10分钟
+        self.task_interval_spinbox.setSingleStep(1)
         
         interval_layout.addWidget(interval_label)
-        interval_layout.addWidget(self.interval_spinbox)
+        interval_layout.addWidget(self.task_interval_spinbox)
 
         # 控制按钮
         button_layout = QHBoxLayout()
@@ -369,81 +374,97 @@ class MainWindow(QMainWindow):
                 self.end_time.setTime(QTime(int(end[0]), int(end[1])))
                 
                 # 加载任务间隔设置
-                self.interval_spinbox.setValue(settings.get('task_interval', 10))
+                self.task_interval_spinbox.setValue(settings.get('task_interval', 10))
             except Exception as e:
                 self.log_text.append(f"加载设置失败: {str(e)}")
 
     def start_program(self):
         """启动程序"""
+        if self.worker_thread and self.worker_thread.isRunning():
+            return
+
+        # 获取登录信息
+        username = self.username_input.text().strip()
+        password = self.password_input.text().strip()
+        remember = self.remember_checkbox.isChecked()
+
+        if not username or not password:
+            self.update_log("请输入用户名和密码")
+            return
+
         # 保存设置
         self.save_settings()
-        
-        # 更新工作时间配置
-        start = self.start_time.time()
-        middle = self.middle_time.time()
-        end = self.end_time.time()
-        
-        # 更新时间配置
-        time_config.update_times(
-            datetime_time(start.hour(), start.minute()),
-            datetime_time(middle.hour(), middle.minute()),
-            datetime_time(end.hour(), end.minute())
-        )
-        
-        # 设置环境变量
-        os.environ['USERNAME'] = self.username_input.text()
-        os.environ['PASSWORD'] = self.password_input.text()
-        
-        # 禁用输入和启动按钮
+
+        # 设置时间
+        start_time = self.start_time.time().toPyTime()
+        middle_time = self.middle_time.time().toPyTime()
+        end_time = self.end_time.time().toPyTime()
+        time_config.set_times(start_time, middle_time, end_time)
+
+        self.update_log(f"设置工作时间：开始={start_time.strftime('%H:%M')}，中间={middle_time.strftime('%H:%M')}，结束={end_time.strftime('%H:%M')}")
+
+        # 禁用输入
         self.username_input.setEnabled(False)
         self.password_input.setEnabled(False)
         self.remember_checkbox.setEnabled(False)
         self.start_time.setEnabled(False)
         self.middle_time.setEnabled(False)
         self.end_time.setEnabled(False)
-        self.interval_spinbox.setEnabled(False)
+        self.task_interval_spinbox.setEnabled(False)
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
-        
-        # 启动工作线程
-        self.worker_thread = WorkerThread(self.interval_spinbox.value())
-        self.worker_thread.log_signal.connect(self.update_log)
-        self.worker_thread.start()
-        
-        logger.info("程序已启动，工作时间设置为：")
-        logger.info(f"开始时间：{start.toString('HH:mm')}")
-        logger.info(f"中间时间：{middle.toString('HH:mm')}")
-        logger.info(f"结束时间：{end.toString('HH:mm')}")
-        logger.info(f"任务间隔：{self.interval_spinbox.value()}分钟")
 
-    def stop_program(self):
-        """终止程序"""
-        if self.worker_thread:
-            self.worker_thread.stop()
-            self.worker_thread.wait()
-            self.worker_thread = None
+        # 设置web_automation模块的错误对话框信号
+        import web_automation
+        web_automation.ui_error_dialog_signal = self.error_dialog_signal
+
+        # 创建线程
+        interval = self.task_interval_spinbox.value()
+        self.worker_thread = WorkerThread(interval)
+        self.worker_thread.finished.connect(self.stop_program)
+
+        # 启动线程
+        self.worker_thread.start()
+        self.update_log("程序已启动")
         
-        # 确保关闭全局浏览器实例
+    def stop_program(self):
+        """停止程序"""
+        if not self.worker_thread or not self.worker_thread.isRunning():
+            return
+
+        # 停止线程
+        self.worker_thread.stop()
+        self.worker_thread.wait()  # 等待线程结束
+        self.worker_thread = None
+
+        # 重置web_automation模块的错误对话框信号
+        import web_automation
+        web_automation.ui_error_dialog_signal = None
+
+        # 关闭浏览器
         try:
-            import main as main_module
-            if hasattr(main_module, 'global_automation') and main_module.global_automation:
-                main_module.global_automation.close()
-                main_module.global_automation = None
+            # 导入main模块
+            import main
+            # 检查是否存在全局浏览器实例并关闭
+            if hasattr(main, 'global_automation') and main.global_automation:
+                logger.info("关闭浏览器")
+                main.global_automation.close()
+                main.global_automation = None
         except Exception as e:
-            logger.error(f"关闭浏览器失败: {str(e)}")
-            
-        # 启用输入和启动按钮
+            logger.error(f"关闭浏览器失败: {e}")
+
+        # 启用输入
         self.username_input.setEnabled(True)
         self.password_input.setEnabled(True)
         self.remember_checkbox.setEnabled(True)
         self.start_time.setEnabled(True)
         self.middle_time.setEnabled(True)
         self.end_time.setEnabled(True)
-        self.interval_spinbox.setEnabled(True)
+        self.task_interval_spinbox.setEnabled(True)
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
-        
-        logger.info("程序已终止")
+
+        self.update_log("程序已终止")
 
     def update_log(self, text):
         """更新日志显示"""
@@ -472,7 +493,7 @@ class MainWindow(QMainWindow):
                 'start_time': self.start_time.time().toString('HH:mm'),
                 'middle_time': self.middle_time.time().toString('HH:mm'),
                 'end_time': self.end_time.time().toString('HH:mm'),
-                'task_interval': self.interval_spinbox.value()
+                'task_interval': self.task_interval_spinbox.value()
             })
             
             if self.remember_checkbox.isChecked():
@@ -620,6 +641,34 @@ class MainWindow(QMainWindow):
         layout.addWidget(author_info)
         
         layout.addStretch()
+
+    def show_error_dialog(self, message):
+        """显示异常处理对话框"""
+        # 使用QMessageBox创建一个模态对话框
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Icon.Warning)
+        
+        # 根据错误消息内容设置不同的标题和提示文本
+        if "登录失败" in message:
+            msg_box.setWindowTitle("登录失败")
+            msg_box.setText("系统登录失败，请检查网络连接和登录凭证，或手动登录系统。\n处理完毕后点击确定继续。")
+        else:
+            msg_box.setWindowTitle("配货失败")
+            msg_box.setText("波次配货过程中出现异常，请手动处理后点击确定继续执行程序。")
+            
+        msg_box.setDetailedText(message)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        # 设置样式以使对话框更明显
+        msg_box.setStyleSheet("QMessageBox { font-size: 12pt; }")
+        
+        # 记录日志
+        logger.warning(f"已弹出异常处理对话框，等待用户处理: {message}")
+        
+        # 显示对话框并等待用户点击确定
+        msg_box.exec()
+        
+        # 用户点击确定后，记录日志
+        logger.info("用户已确认异常处理完成，程序继续执行")
 
 def main():
     app = QApplication(sys.argv)
